@@ -1,6 +1,13 @@
 import html
+import os
+import re
+from io import BytesIO
 
 import streamlit as st
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import inch
 
 st.set_page_config(
     page_title="Labels for Catering",
@@ -69,18 +76,10 @@ ITEMS = {
     ],
 }
 
-STAR_COLORS = {
-    "Salades": "#C6A45A",
-    "Mezzes": "#6EAFC0",
-    "Dips": "#2C6E78",
-    "Plats Groupe": "#17233A",
-    "Plats Individus": "#6E8EAE",
-    "Sandwiches": "#8D6B3F",
-    "Dessert": "#C6A45A",
-}
-
-NAVY = "#17233A"
 TEAL = "#6EAFC0"
+LABEL_W = 3 * inch
+LABEL_H = 1 * inch
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
 
 
 def burst(color: str, size: int = 78) -> str:
@@ -96,35 +95,101 @@ def burst(color: str, size: int = 78) -> str:
     )
 
 
-def sticker_name_html(name: str) -> tuple[str, str]:
+def label_lines(name: str) -> list[str]:
     if " — " in name:
-        main, detail = name.split(" — ", 1)
-        body = (
-            f"{html.escape(main)}"
-            f'<span class="sticker-detail">{html.escape(detail)}</span>'
-        )
-        return body, "name-short"
-    length = len(name)
-    if length > 28:
-        size = "name-long"
-    elif length > 18:
-        size = "name-medium"
+        return [part.strip() for part in name.split(" — ", 1)]
+    return [name]
+
+
+def _register_fonts() -> None:
+    if "Outfit-Bold" in pdfmetrics.getRegisteredFontNames():
+        return
+    pdfmetrics.registerFont(TTFont("Outfit", os.path.join(FONT_DIR, "Outfit-Regular.ttf")))
+    pdfmetrics.registerFont(TTFont("Outfit-Bold", os.path.join(FONT_DIR, "Outfit-Bold.ttf")))
+
+
+def _fit_size(text: str, font: str, max_width: float, start: float, minimum: float) -> float:
+    size = start
+    while size > minimum and pdfmetrics.stringWidth(text, font, size) > max_width:
+        size -= 0.25
+    return size
+
+
+def _draw_burst(pdf: canvas.Canvas, cx: float, cy: float) -> None:
+    pdf.setFillColorRGB(0, 0, 0)
+    for angle in (0, 45, 90, 135):
+        pdf.saveState()
+        pdf.translate(cx, cy)
+        pdf.rotate(angle)
+        pdf.ellipse(-5.2, -15.5, 5.2, 15.5, fill=1, stroke=0)
+        pdf.restoreState()
+
+
+def build_label_pdf(name: str, kicker: str) -> bytes:
+    _register_fonts()
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=(LABEL_W, LABEL_H))
+    _draw_burst(pdf, 26, LABEL_H / 2)
+
+    lines = label_lines(name)
+    text_x = 48
+    max_width = LABEL_W - text_x - 8
+    kicker_size = 6.5
+    if len(lines) == 1:
+        name_size = _fit_size(lines[0], "Outfit-Bold", max_width, 16, 10)
+        block = kicker_size + 4 + name_size
+        top = (LABEL_H + block) / 2
+        pdf.setFillColorRGB(0, 0, 0)
+        pdf.setFont("Outfit", kicker_size)
+        pdf.drawString(text_x, top - kicker_size, kicker.upper())
+        pdf.setFont("Outfit-Bold", name_size)
+        pdf.drawString(text_x, top - kicker_size - 4 - name_size, lines[0])
     else:
-        size = "name-short"
-    return html.escape(name), size
+        first = _fit_size(lines[0], "Outfit-Bold", max_width, 13, 9)
+        second = _fit_size(lines[1], "Outfit-Bold", max_width, 11, 8)
+        block = kicker_size + 3 + first + 2 + second
+        top = (LABEL_H + block) / 2
+        pdf.setFillColorRGB(0, 0, 0)
+        pdf.setFont("Outfit", kicker_size)
+        pdf.drawString(text_x, top - kicker_size, kicker.upper())
+        pdf.setFont("Outfit-Bold", first)
+        pdf.drawString(text_x, top - kicker_size - 3 - first, lines[0])
+        pdf.setFont("Outfit-Bold", second)
+        pdf.drawString(text_x, top - kicker_size - 3 - first - 2 - second, lines[1])
+
+    pdf.showPage()
+    pdf.save()
+    return buffer.getvalue()
 
 
-def sticker_html(name: str, kicker: str, color: str) -> str:
-    body, size = sticker_name_html(name)
+def sticker_html(name: str, kicker: str) -> str:
+    lines = label_lines(name)
+    if len(lines) == 1:
+        if len(lines[0]) > 24:
+            size = "label-name label-name-long"
+        elif len(lines[0]) > 18:
+            size = "label-name label-name-medium"
+        else:
+            size = "label-name"
+        name_html = f'<div class="{size}">{html.escape(lines[0])}</div>'
+    else:
+        name_html = (
+            f'<div class="label-name label-name-two">{html.escape(lines[0])}</div>'
+            f'<div class="label-name label-name-sub">{html.escape(lines[1])}</div>'
+        )
     return f"""
-    <div class="sticker-wrap">
-      <div class="sticker">
-        {burst(color, 72)}
-        <div class="sticker-kicker">{html.escape(kicker)}</div>
-        <div class="sticker-name {size}">{body}</div>
-        <div class="sticker-rule"></div>
+    <div class="label-slot">
+      <div class="label-zoom">
+        <div class="label">
+          {burst("#111111", "0.58in")}
+          <div class="label-copy">
+            <div class="label-kicker">{html.escape(kicker)}</div>
+            {name_html}
+          </div>
+        </div>
       </div>
     </div>
+    <p class="label-meta">ZDesigner GX420d · 3.00 × 1.00 in</p>
     """
 
 
@@ -219,56 +284,72 @@ st.markdown(
         font-size: 13px;
         padding-left: 0;
     }
-    .sticker-wrap {
+    .label-slot {
+        height: 2.5in;
         display: flex;
         justify-content: center;
-        padding: 8px 0 12px;
+        align-items: flex-start;
+        margin-top: 10px;
     }
-    .sticker {
-        width: 440px;
-        min-height: 300px;
+    .label-zoom {
+        width: 3in;
+        height: 1in;
+        transform: scale(2.5);
+        transform-origin: top center;
+    }
+    .label {
+        width: 3in;
+        height: 1in;
         box-sizing: border-box;
-        background: #F6F2E9;
-        border-radius: 18px;
-        border: 1px solid rgba(23, 35, 58, 0.08);
-        box-shadow: 0 10px 28px rgba(23, 35, 58, 0.08);
+        background: #ffffff;
+        color: #111111;
+        display: flex;
+        align-items: center;
+        gap: 0.1in;
+        padding: 0.08in 0.12in 0.08in 0.1in;
+        border: 1px solid #111111;
+    }
+    .label-copy {
+        min-width: 0;
         display: flex;
         flex-direction: column;
-        align-items: center;
         justify-content: center;
-        text-align: center;
-        padding: 32px 36px 28px;
     }
-    .sticker-kicker {
-        margin-top: 16px;
-        color: #8A8172;
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.24em;
-        text-transform: uppercase;
-    }
-    .sticker-name {
-        margin-top: 10px;
-        color: #17233A;
+    .label-kicker {
+        margin: 0 0 1px;
+        font-size: 7pt;
         font-weight: 700;
-        letter-spacing: -0.035em;
-        line-height: 1.08;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        line-height: 1;
     }
-    .name-short { font-size: 42px; }
-    .name-medium { font-size: 34px; }
-    .name-long { font-size: 30px; }
-    .sticker-detail {
-        display: block;
-        margin-top: 8px;
-        font-size: 22px;
-        font-weight: 600;
-        letter-spacing: -0.02em;
+    .label-name {
+        font-size: 16pt;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        line-height: 1.02;
+        white-space: nowrap;
     }
-    .sticker-rule {
-        width: 56px;
-        height: 2px;
-        margin-top: 20px;
-        background: #17233A;
+    .label-name-medium { font-size: 13.5pt; }
+    .label-name-long { font-size: 12pt; }
+    .label-name-two { font-size: 13pt; white-space: nowrap; }
+    .label-name-sub { font-size: 11pt; margin-top: 1px; white-space: nowrap; }
+    .label-meta {
+        text-align: center;
+        color: #5c564c;
+        font-size: 13px;
+        letter-spacing: 0.04em;
+        margin: 8px 0 4px;
+    }
+    @media print {
+        @page { size: 3in 1in; margin: 0; }
+        .brand, .label-meta, [data-testid="stHeader"], [data-testid="stToolbar"],
+        footer, [data-testid="stDownloadButton"], .stButton {
+            display: none !important;
+        }
+        .label-slot { height: 1in; margin: 0; }
+        .label-zoom { transform: none; }
+        .label { border: none; }
     }
     </style>
     """,
@@ -309,13 +390,19 @@ elif st.session_state.screen == "sticker":
         st.rerun()
     if st.session_state.sticker_from == "allergies":
         kicker = "Allergie"
-        color = TEAL
     else:
         kicker = st.session_state.category or ""
-        color = STAR_COLORS.get(kicker, NAVY)
     st.markdown(
-        sticker_html(st.session_state.sticker_name, kicker, color),
+        sticker_html(st.session_state.sticker_name, kicker),
         unsafe_allow_html=True,
+    )
+    safe_name = re.sub(r"[^A-Za-z0-9]+", "-", st.session_state.sticker_name).strip("-")
+    st.download_button(
+        "Télécharger le PDF",
+        data=build_label_pdf(st.session_state.sticker_name, kicker),
+        file_name=f"{safe_name or 'etiquette'}.pdf",
+        mime="application/pdf",
+        use_container_width=True,
     )
 else:
     if st.button("Retour", key="back"):
