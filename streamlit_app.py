@@ -1,4 +1,3 @@
-import base64
 import html
 import os
 from io import BytesIO
@@ -139,28 +138,41 @@ def build_label_pdf(name: str, kicker: str, inverted: bool = False) -> bytes:
     lines = label_lines(name)
     text_x = 48
     max_width = LABEL_W - text_x - 8
-    kicker_size = 7 if inverted else 6.5
-    kicker_font = "Outfit-Bold" if inverted else "Outfit"
     pdf.setFillColorRGB(*ink)
-    if len(lines) == 1:
+    if kicker and len(lines) == 1:
+        kicker_size = 7
         name_size = _fit_size(lines[0], "Outfit-Bold", max_width, 16, 10)
         block = kicker_size + 4 + name_size
         top = (LABEL_H + block) / 2
-        pdf.setFont(kicker_font, kicker_size)
+        pdf.setFont("Outfit-Bold", kicker_size)
         pdf.drawString(text_x, top - kicker_size, kicker.upper())
         pdf.setFont("Outfit-Bold", name_size)
         pdf.drawString(text_x, top - kicker_size - 4 - name_size, lines[0])
-    else:
+    elif kicker:
+        kicker_size = 7
         first = _fit_size(lines[0], "Outfit-Bold", max_width, 13, 9)
         second = _fit_size(lines[1], "Outfit-Bold", max_width, 11, 8)
         block = kicker_size + 3 + first + 2 + second
         top = (LABEL_H + block) / 2
-        pdf.setFont(kicker_font, kicker_size)
+        pdf.setFont("Outfit-Bold", kicker_size)
         pdf.drawString(text_x, top - kicker_size, kicker.upper())
         pdf.setFont("Outfit-Bold", first)
         pdf.drawString(text_x, top - kicker_size - 3 - first, lines[0])
         pdf.setFont("Outfit-Bold", second)
         pdf.drawString(text_x, top - kicker_size - 3 - first - 2 - second, lines[1])
+    elif len(lines) == 1:
+        name_size = _fit_size(lines[0], "Outfit-Bold", max_width, 22, 12)
+        pdf.setFont("Outfit-Bold", name_size)
+        pdf.drawString(text_x, (LABEL_H - name_size) / 2 + 1, lines[0])
+    else:
+        first = _fit_size(lines[0], "Outfit-Bold", max_width, 16, 11)
+        second = _fit_size(lines[1], "Outfit-Bold", max_width, 13, 9)
+        block = first + 3 + second
+        top = (LABEL_H + block) / 2
+        pdf.setFont("Outfit-Bold", first)
+        pdf.drawString(text_x, top - first, lines[0])
+        pdf.setFont("Outfit-Bold", second)
+        pdf.drawString(text_x, top - first - 3 - second, lines[1])
 
     pdf.showPage()
     pdf.save()
@@ -176,25 +188,25 @@ def sticker_html(name: str, kicker: str, inverted: bool = False) -> str:
             size = "label-name label-name-medium"
         else:
             size = "label-name"
+        if not kicker:
+            size += " label-solo"
         name_html = f'<div class="{size}">{html.escape(lines[0])}</div>'
     else:
         name_html = (
             f'<div class="label-name label-name-two">{html.escape(lines[0])}</div>'
             f'<div class="label-name label-name-sub">{html.escape(lines[1])}</div>'
         )
-    return f"""
-    <div class="label-slot">
-      <div class="label-zoom">
-        <div class="label{' label-allergy' if inverted else ''}">
-          {burst("#ffffff" if inverted else "#111111", "0.58in")}
-          <div class="label-copy">
-            <div class="label-kicker">{html.escape(kicker)}</div>
-            {name_html}
-          </div>
-        </div>
-      </div>
-    </div>
-    """
+    kicker_html = (
+        f'<div class="label-kicker">{html.escape(kicker)}</div>' if kicker else ""
+    )
+    allergy = " label-allergy" if inverted else ""
+    star = burst("#ffffff" if inverted else "#111111", "0.58in")
+    return (
+        '<div class="label-slot"><div class="label-zoom">'
+        f'<div class="label{allergy}">{star}'
+        f'<div class="label-copy">{kicker_html}{name_html}</div>'
+        "</div></div></div>"
+    )
 
 
 if "screen" not in st.session_state:
@@ -342,25 +354,50 @@ st.markdown(
         white-space: nowrap;
     }
     .label-name-medium { font-size: 13.5pt; }
+    .label-solo { font-size: 20pt; }
     .label-name-long { font-size: 12pt; }
     .label-name-two { font-size: 13pt; white-space: nowrap; }
     .label-name-sub { font-size: 11pt; margin-top: 1px; white-space: nowrap; }
-    .label-meta {
+    a.print-link {
+        display: block;
+        width: min(100%, 7.5in);
+        margin: 14px auto 0;
+        height: 44px;
+        line-height: 44px;
+        box-sizing: border-box;
+        border: 1px solid rgba(23, 35, 58, 0.2);
+        border-radius: 8px;
+        background: #F6F2E9;
+        color: #17233A;
+        font-size: 16px;
+        font-weight: 600;
         text-align: center;
-        color: #5c564c;
-        font-size: 13px;
-        letter-spacing: 0.04em;
-        margin: 8px 0 4px;
+        text-decoration: none;
     }
+    a.print-link:hover { border-color: #17233A; color: #17233A; }
     @media print {
         @page { size: 3in 1in; margin: 0; }
-        .brand, .label-meta, [data-testid="stHeader"], [data-testid="stToolbar"],
-        footer, [data-testid="stDownloadButton"], .stButton {
+        html, body, .stApp, [data-testid="stAppViewContainer"],
+        [data-testid="stMain"], section.main, .block-container {
+            background: #fff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 1in !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+        }
+        .brand, header, footer, [data-testid="stHeader"],
+        [data-testid="stToolbar"], [data-testid="stDecoration"],
+        .stButton, iframe {
             display: none !important;
         }
-        .label-slot { height: 1in; margin: 0; }
-        .label-zoom { transform: none; }
-        .label { border: none; }
+        .label-slot {
+            height: 1in !important;
+            margin: 0 !important;
+            display: block !important;
+        }
+        .label-zoom { transform: none !important; }
+        .label { border: none !important; }
     }
     </style>
     """,
@@ -400,57 +437,31 @@ elif st.session_state.screen == "sticker":
         st.session_state.screen = st.session_state.sticker_from
         st.rerun()
     inverted = st.session_state.sticker_from == "allergies"
-    kicker = "Allergie" if inverted else (st.session_state.category or "")
+    kicker = "Allergie" if inverted else ""
     st.markdown(
         sticker_html(st.session_state.sticker_name, kicker, inverted),
         unsafe_allow_html=True,
     )
-    pdf_b64 = base64.b64encode(
-        build_label_pdf(st.session_state.sticker_name, kicker, inverted)
-    ).decode("ascii")
     components.html(
-        f"""
+        """
         <button id="print" type="button">Imprimer</button>
         <script>
-          const pdfB64 = "{pdf_b64}";
-          document.getElementById("print").onclick = () => {{
-            const raw = atob(pdfB64);
-            const bytes = new Uint8Array(raw.length);
-            for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-            const url = URL.createObjectURL(new Blob([bytes], {{type: "application/pdf"}}));
-            const frame = document.createElement("iframe");
-            frame.setAttribute("aria-hidden", "true");
-            frame.style.position = "fixed";
-            frame.style.width = "0";
-            frame.style.height = "0";
-            frame.style.border = "0";
-            document.body.appendChild(frame);
-            frame.onload = () => {{
-              setTimeout(() => {{
-                frame.contentWindow.focus();
-                frame.contentWindow.print();
-              }}, 300);
-            }};
-            frame.src = url;
-          }};
+          document.getElementById("print").onclick = () => {
+            window.parent.print();
+          };
         </script>
         <style>
-          html, body {{
-            margin: 0;
-            background: #E4DFD3;
-            font-family: Outfit, "Segoe UI", sans-serif;
-          }}
-          #print {{
+          html, body { margin: 0; background: #E4DFD3; }
+          #print {
             width: 100%;
             height: 44px;
             border: 1px solid rgba(23, 35, 58, 0.2);
             border-radius: 8px;
             background: #F6F2E9;
             color: #17233A;
-            font: 600 16px Outfit, "Segoe UI", sans-serif;
+            font: 600 16px "Segoe UI", sans-serif;
             cursor: pointer;
-          }}
-          #print:hover {{ border-color: #17233A; }}
+          }
         </style>
         """,
         height=52,
