@@ -1,9 +1,10 @@
+import base64
 import html
 import os
-import re
 from io import BytesIO
 
 import streamlit as st
+import streamlit.components.v1 as components
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
@@ -193,7 +194,6 @@ def sticker_html(name: str, kicker: str, inverted: bool = False) -> str:
         </div>
       </div>
     </div>
-    <p class="label-meta">ZDesigner GX420d · 3.00 × 1.00 in</p>
     """
 
 
@@ -405,13 +405,55 @@ elif st.session_state.screen == "sticker":
         sticker_html(st.session_state.sticker_name, kicker, inverted),
         unsafe_allow_html=True,
     )
-    safe_name = re.sub(r"[^A-Za-z0-9]+", "-", st.session_state.sticker_name).strip("-")
-    st.download_button(
-        "Télécharger le PDF",
-        data=build_label_pdf(st.session_state.sticker_name, kicker, inverted),
-        file_name=f"{safe_name or 'etiquette'}.pdf",
-        mime="application/pdf",
-        use_container_width=True,
+    pdf_b64 = base64.b64encode(
+        build_label_pdf(st.session_state.sticker_name, kicker, inverted)
+    ).decode("ascii")
+    components.html(
+        f"""
+        <button id="print" type="button">Imprimer</button>
+        <script>
+          const pdfB64 = "{pdf_b64}";
+          document.getElementById("print").onclick = () => {{
+            const raw = atob(pdfB64);
+            const bytes = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+            const url = URL.createObjectURL(new Blob([bytes], {{type: "application/pdf"}}));
+            const frame = document.createElement("iframe");
+            frame.setAttribute("aria-hidden", "true");
+            frame.style.position = "fixed";
+            frame.style.width = "0";
+            frame.style.height = "0";
+            frame.style.border = "0";
+            document.body.appendChild(frame);
+            frame.onload = () => {{
+              setTimeout(() => {{
+                frame.contentWindow.focus();
+                frame.contentWindow.print();
+              }}, 300);
+            }};
+            frame.src = url;
+          }};
+        </script>
+        <style>
+          html, body {{
+            margin: 0;
+            background: #E4DFD3;
+            font-family: Outfit, "Segoe UI", sans-serif;
+          }}
+          #print {{
+            width: 100%;
+            height: 44px;
+            border: 1px solid rgba(23, 35, 58, 0.2);
+            border-radius: 8px;
+            background: #F6F2E9;
+            color: #17233A;
+            font: 600 16px Outfit, "Segoe UI", sans-serif;
+            cursor: pointer;
+          }}
+          #print:hover {{ border-color: #17233A; }}
+        </style>
+        """,
+        height=52,
     )
 else:
     if st.button("Retour", key="back"):
