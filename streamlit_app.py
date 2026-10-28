@@ -115,8 +115,8 @@ def _fit_size(text: str, font: str, max_width: float, start: float, minimum: flo
     return size
 
 
-def _draw_burst(pdf: canvas.Canvas, cx: float, cy: float) -> None:
-    pdf.setFillColorRGB(0, 0, 0)
+def _draw_burst(pdf: canvas.Canvas, cx: float, cy: float, ink: tuple[float, float, float]) -> None:
+    pdf.setFillColorRGB(*ink)
     for angle in (0, 45, 90, 135):
         pdf.saveState()
         pdf.translate(cx, cy)
@@ -125,22 +125,27 @@ def _draw_burst(pdf: canvas.Canvas, cx: float, cy: float) -> None:
         pdf.restoreState()
 
 
-def build_label_pdf(name: str, kicker: str) -> bytes:
+def build_label_pdf(name: str, kicker: str, inverted: bool = False) -> bytes:
     _register_fonts()
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=(LABEL_W, LABEL_H))
-    _draw_burst(pdf, 26, LABEL_H / 2)
+    ink = (1, 1, 1) if inverted else (0, 0, 0)
+    if inverted:
+        pdf.setFillColorRGB(0, 0, 0)
+        pdf.rect(0, 0, LABEL_W, LABEL_H, fill=1, stroke=0)
+    _draw_burst(pdf, 26, LABEL_H / 2, ink)
 
     lines = label_lines(name)
     text_x = 48
     max_width = LABEL_W - text_x - 8
-    kicker_size = 6.5
+    kicker_size = 7 if inverted else 6.5
+    kicker_font = "Outfit-Bold" if inverted else "Outfit"
+    pdf.setFillColorRGB(*ink)
     if len(lines) == 1:
         name_size = _fit_size(lines[0], "Outfit-Bold", max_width, 16, 10)
         block = kicker_size + 4 + name_size
         top = (LABEL_H + block) / 2
-        pdf.setFillColorRGB(0, 0, 0)
-        pdf.setFont("Outfit", kicker_size)
+        pdf.setFont(kicker_font, kicker_size)
         pdf.drawString(text_x, top - kicker_size, kicker.upper())
         pdf.setFont("Outfit-Bold", name_size)
         pdf.drawString(text_x, top - kicker_size - 4 - name_size, lines[0])
@@ -149,8 +154,7 @@ def build_label_pdf(name: str, kicker: str) -> bytes:
         second = _fit_size(lines[1], "Outfit-Bold", max_width, 11, 8)
         block = kicker_size + 3 + first + 2 + second
         top = (LABEL_H + block) / 2
-        pdf.setFillColorRGB(0, 0, 0)
-        pdf.setFont("Outfit", kicker_size)
+        pdf.setFont(kicker_font, kicker_size)
         pdf.drawString(text_x, top - kicker_size, kicker.upper())
         pdf.setFont("Outfit-Bold", first)
         pdf.drawString(text_x, top - kicker_size - 3 - first, lines[0])
@@ -162,7 +166,7 @@ def build_label_pdf(name: str, kicker: str) -> bytes:
     return buffer.getvalue()
 
 
-def sticker_html(name: str, kicker: str) -> str:
+def sticker_html(name: str, kicker: str, inverted: bool = False) -> str:
     lines = label_lines(name)
     if len(lines) == 1:
         if len(lines[0]) > 24:
@@ -180,8 +184,8 @@ def sticker_html(name: str, kicker: str) -> str:
     return f"""
     <div class="label-slot">
       <div class="label-zoom">
-        <div class="label">
-          {burst("#111111", "0.58in")}
+        <div class="label{' label-allergy' if inverted else ''}">
+          {burst("#ffffff" if inverted else "#111111", "0.58in")}
           <div class="label-copy">
             <div class="label-kicker">{html.escape(kicker)}</div>
             {name_html}
@@ -309,11 +313,18 @@ st.markdown(
         padding: 0.08in 0.12in 0.08in 0.1in;
         border: 1px solid #111111;
     }
+    .label-allergy {
+        background: #111111;
+        color: #ffffff;
+    }
     .label-copy {
         min-width: 0;
         display: flex;
         flex-direction: column;
         justify-content: center;
+    }
+    .label-allergy .label-kicker {
+        font-weight: 700;
     }
     .label-kicker {
         margin: 0 0 1px;
@@ -388,18 +399,16 @@ elif st.session_state.screen == "sticker":
     if st.button("Retour", key="back"):
         st.session_state.screen = st.session_state.sticker_from
         st.rerun()
-    if st.session_state.sticker_from == "allergies":
-        kicker = "Allergie"
-    else:
-        kicker = st.session_state.category or ""
+    inverted = st.session_state.sticker_from == "allergies"
+    kicker = "Allergie" if inverted else (st.session_state.category or "")
     st.markdown(
-        sticker_html(st.session_state.sticker_name, kicker),
+        sticker_html(st.session_state.sticker_name, kicker, inverted),
         unsafe_allow_html=True,
     )
     safe_name = re.sub(r"[^A-Za-z0-9]+", "-", st.session_state.sticker_name).strip("-")
     st.download_button(
         "Télécharger le PDF",
-        data=build_label_pdf(st.session_state.sticker_name, kicker),
+        data=build_label_pdf(st.session_state.sticker_name, kicker, inverted),
         file_name=f"{safe_name or 'etiquette'}.pdf",
         mime="application/pdf",
         use_container_width=True,
