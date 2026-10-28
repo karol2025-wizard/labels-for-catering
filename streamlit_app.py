@@ -1,3 +1,4 @@
+import base64
 import html
 import os
 from io import BytesIO
@@ -179,7 +180,7 @@ def build_label_pdf(name: str, kicker: str, inverted: bool = False) -> bytes:
     return buffer.getvalue()
 
 
-def sticker_html(name: str, kicker: str, inverted: bool = False) -> str:
+def label_markup(name: str, kicker: str, inverted: bool) -> str:
     lines = label_lines(name)
     if len(lines) == 1:
         if len(lines[0]) > 24:
@@ -202,11 +203,73 @@ def sticker_html(name: str, kicker: str, inverted: bool = False) -> str:
     allergy = " label-allergy" if inverted else ""
     star = burst("#ffffff" if inverted else "#111111", "0.58in")
     return (
-        '<div class="label-slot"><div class="label-zoom">'
         f'<div class="label{allergy}">{star}'
-        f'<div class="label-copy">{kicker_html}{name_html}</div>'
-        "</div></div></div>"
+        f'<div class="label-copy">{kicker_html}{name_html}</div></div>'
     )
+
+
+def sticker_html(name: str, kicker: str, inverted: bool = False) -> str:
+    return (
+        '<div class="label-slot"><div class="label-zoom">'
+        f"{label_markup(name, kicker, inverted)}"
+        "</div></div>"
+    )
+
+
+def print_page(name: str, kicker: str, inverted: bool) -> str:
+    font = base64.b64encode(
+        open(os.path.join(FONT_DIR, "Outfit-Bold.ttf"), "rb").read()
+    ).decode("ascii")
+    bg = "#111111" if inverted else "#ffffff"
+    ink = "#ffffff" if inverted else "#111111"
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Etiquette</title>
+<style>
+@font-face {{
+  font-family: Outfit;
+  font-weight: 700;
+  src: url(data:font/ttf;base64,{font}) format("truetype");
+}}
+@page {{ size: 3in 1in; margin: 0; }}
+html, body {{
+  margin: 0;
+  width: 3in;
+  height: 1in;
+  overflow: hidden;
+  background: {bg};
+}}
+.label {{
+  width: 3in;
+  height: 1in;
+  box-sizing: border-box;
+  background: {bg};
+  color: {ink};
+  display: flex;
+  align-items: center;
+  gap: 0.1in;
+  padding: 0.08in 0.12in 0.08in 0.1in;
+  font-family: Outfit, Arial, sans-serif;
+}}
+.label-copy {{ display: flex; flex-direction: column; justify-content: center; }}
+.label-kicker {{
+  font-size: 7pt; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; line-height: 1; margin: 0 0 1px;
+}}
+.label-name {{ font-size: 16pt; font-weight: 700; letter-spacing: -0.03em; line-height: 1.02; white-space: nowrap; }}
+.label-name-medium {{ font-size: 13.5pt; }}
+.label-name-long {{ font-size: 12pt; }}
+.label-solo {{ font-size: 20pt; }}
+.label-name-two {{ font-size: 13pt; }}
+.label-name-sub {{ font-size: 11pt; margin-top: 1px; }}
+</style>
+</head>
+<body>
+{label_markup(name, kicker, inverted)}
+</body>
+</html>"""
 
 
 if "screen" not in st.session_state:
@@ -442,17 +505,32 @@ elif st.session_state.screen == "sticker":
         sticker_html(st.session_state.sticker_name, kicker, inverted),
         unsafe_allow_html=True,
     )
+    page = base64.b64encode(
+        print_page(st.session_state.sticker_name, kicker, inverted).encode("utf-8")
+    ).decode("ascii")
     components.html(
-        """
+        f"""
         <button id="print" type="button">Imprimer</button>
         <script>
-          document.getElementById("print").onclick = () => {
-            window.parent.print();
-          };
+          const page = atob("{page}");
+          document.getElementById("print").onclick = () => {{
+            const parentDoc = window.parent.document;
+            let frame = parentDoc.getElementById("label-print-frame");
+            if (frame) frame.remove();
+            frame = parentDoc.createElement("iframe");
+            frame.id = "label-print-frame";
+            frame.setAttribute("style", "position:fixed;width:3in;height:1in;border:0;left:0;top:0;opacity:0;pointer-events:none;");
+            frame.onload = () => {{
+              frame.contentWindow.focus();
+              frame.contentWindow.print();
+            }};
+            parentDoc.body.appendChild(frame);
+            frame.srcdoc = page;
+          }};
         </script>
         <style>
-          html, body { margin: 0; background: #E4DFD3; }
-          #print {
+          html, body {{ margin: 0; background: #E4DFD3; }}
+          #print {{
             width: 100%;
             height: 44px;
             border: 1px solid rgba(23, 35, 58, 0.2);
@@ -461,7 +539,7 @@ elif st.session_state.screen == "sticker":
             color: #17233A;
             font: 600 16px "Segoe UI", sans-serif;
             cursor: pointer;
-          }
+          }}
         </style>
         """,
         height=52,
