@@ -18,16 +18,59 @@ ALLERGIES = [
     "Vegan",
 ]
 
-CATEGORIES = [
-    "Salades",
-    "Mezzes",
-    "Dips",
-    "Plats Groupe",
-    "Plats Individus",
-]
+ITEMS = {
+    "Salades": [
+        "Classic Fattouch",
+        "Zesty Fattouch",
+        "Chou Frisé Kale",
+    ],
+    "Mezzes": [
+        "Yalanji",
+        "Kibbeh Pistaches",
+        "Chou-Fleur",
+    ],
+    "Dips": [
+        "Hummus",
+        "Mouhammara",
+        "Mutabbal Betteraves",
+        "Mutabbal Aubergine",
+        "Labneh",
+        "Pain Saj",
+    ],
+    "Plats Groupe": [
+        "Crispy Taouk Kit",
+        "Saumon Kit",
+        "Shawarma Agneau Kit",
+        "Shish Taouk Kit",
+        "Riz",
+    ],
+    "Plats Individus": [
+        "Lamb Shawarma Plate",
+        "Shish Taouk Plate",
+        "Mix Plate — Shish Taouk + Lamb",
+        "Salmon Plate",
+        "Hummus Shawarma — Lamb",
+    ],
+    "Sandwiches": [
+        "Crispy Taouk",
+        "Shish Taouk",
+        "Shawarma — Lamb",
+        "Cauliflower",
+        "Falafel",
+        "Shawarma — Chicken",
+        "Halloumi",
+    ],
+    "Dessert": [
+        "Strawberry Almond Cookie",
+        "Pistachio Baklava Cookie",
+        "Date Cookie",
+    ],
+}
 
 if "screen" not in st.session_state:
     st.session_state.screen = "home"
+if "category" not in st.session_state:
+    st.session_state.category = None
 
 st.markdown(
     """
@@ -65,7 +108,8 @@ st.markdown(
     }
     div[class*="st-key-choice_"] button,
     div[class*="st-key-allergy_"] button,
-    div[class*="st-key-category_"] button {
+    div[class*="st-key-category_"] button,
+    div[class*="st-key-item_"] button {
         width: 100%;
         background: #ffffff;
         color: #111827;
@@ -78,10 +122,18 @@ st.markdown(
     }
     div[class*="st-key-choice_"] button:hover,
     div[class*="st-key-allergy_"] button:hover,
-    div[class*="st-key-category_"] button:hover {
+    div[class*="st-key-category_"] button:hover,
+    div[class*="st-key-item_"] button:hover {
         border-color: #1E3A8A;
         color: #1E3A8A;
         background: #ffffff;
+    }
+    .category-title {
+        text-align: center;
+        color: #1E3A8A;
+        font-size: 22px;
+        font-weight: 700;
+        margin: 4px 0 18px;
     }
     div.st-key-back button {
         background: transparent;
@@ -102,8 +154,8 @@ st.markdown(
 
 
 def show_menu(labels, key_prefix):
-    for label in labels:
-        st.button(label, key=f"{key_prefix}_{label}", use_container_width=True)
+    for index, label in enumerate(labels):
+        st.button(label, key=f"{key_prefix}_{index}", use_container_width=True)
 
 
 if st.session_state.screen == "home":
@@ -115,9 +167,24 @@ if st.session_state.screen == "home":
         st.rerun()
 else:
     if st.button("← Retour", key="back"):
-        st.session_state.screen = "home"
+        if st.session_state.screen == "items":
+            st.session_state.screen = "articles"
+            st.session_state.category = None
+        else:
+            st.session_state.screen = "home"
         st.rerun()
+
     if st.session_state.screen == "allergies":
         show_menu(ALLERGIES, "allergy")
-    else:
-        show_menu(CATEGORIES, "category")
+    elif st.session_state.screen == "articles":
+        for index, category in enumerate(ITEMS):
+            if st.button(category, key=f"category_{index}", use_container_width=True):
+                st.session_state.category = category
+                st.session_state.screen = "items"
+                st.rerun()
+    elif st.session_state.category in ITEMS:
+        st.markdown(
+            f'<p class="category-title">{st.session_state.category}</p>',
+            unsafe_allow_html=True,
+        )
+        show_menu(ITEMS[st.session_state.category], "item")
