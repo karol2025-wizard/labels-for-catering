@@ -222,6 +222,13 @@ def print_page(name: str, kicker: str, inverted: bool) -> str:
     ).decode("ascii")
     bg = "#111111" if inverted else "#ffffff"
     ink = "#ffffff" if inverted else "#111111"
+    plate = (
+        '<svg class="ink-plate" xmlns="http://www.w3.org/2000/svg" '
+        'width="3in" height="1in" viewBox="0 0 300 100" preserveAspectRatio="none">'
+        '<rect width="300" height="100" fill="#000000"/></svg>'
+        if inverted
+        else ""
+    )
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -240,8 +247,21 @@ html, body {{
   height: 1in;
   overflow: hidden;
   background: {bg};
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}}
+body {{ position: relative; }}
+.ink-plate {{
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3in;
+  height: 1in;
+  z-index: 0;
 }}
 .label {{
+  position: relative;
+  z-index: 1;
   width: 3in;
   height: 1in;
   box-sizing: border-box;
@@ -252,6 +272,8 @@ html, body {{
   gap: 0.1in;
   padding: 0.08in 0.12in 0.08in 0.1in;
   font-family: Outfit, Arial, sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }}
 .label-copy {{ display: flex; flex-direction: column; justify-content: center; }}
 .label-kicker {{
@@ -267,6 +289,7 @@ html, body {{
 </style>
 </head>
 <body>
+{plate}
 {label_markup(name, kicker, inverted)}
 </body>
 </html>"""
@@ -513,19 +536,31 @@ elif st.session_state.screen == "sticker":
         <button id="print" type="button">Imprimer</button>
         <script>
           const page = atob("{page}");
+          const parentDoc = window.parent.document;
+          let frame = parentDoc.getElementById("label-print-frame");
+          if (frame) frame.remove();
+          frame = parentDoc.createElement("iframe");
+          frame.id = "label-print-frame";
+          frame.setAttribute("style", "position:fixed;width:3in;height:1in;border:0;left:0;top:0;transform:translate(-120vw,0);pointer-events:none;");
+          let ready = false;
+          frame.onload = () => {{
+            const fonts = frame.contentWindow.document.fonts;
+            const mark = () => {{ ready = true; }};
+            if (fonts && fonts.ready) fonts.ready.then(mark);
+            else mark();
+          }};
+          parentDoc.body.appendChild(frame);
+          frame.srcdoc = page;
           document.getElementById("print").onclick = () => {{
-            const parentDoc = window.parent.document;
-            let frame = parentDoc.getElementById("label-print-frame");
-            if (frame) frame.remove();
-            frame = parentDoc.createElement("iframe");
-            frame.id = "label-print-frame";
-            frame.setAttribute("style", "position:fixed;width:3in;height:1in;border:0;left:0;top:0;opacity:0;pointer-events:none;");
-            frame.onload = () => {{
+            const go = () => {{
               frame.contentWindow.focus();
               frame.contentWindow.print();
             }};
-            parentDoc.body.appendChild(frame);
-            frame.srcdoc = page;
+            if (ready) go();
+            else {{
+              const fonts = frame.contentWindow.document.fonts;
+              (fonts && fonts.ready ? fonts.ready : Promise.resolve()).then(go);
+            }}
           }};
         </script>
         <style>
