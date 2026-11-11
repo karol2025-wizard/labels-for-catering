@@ -47,12 +47,13 @@ ITEMS = {
         "Labneh",
         "Pain Saj",
     ],
-    "Plats Groupe": [
+    "Kit": [
         "Crispy Taouk Kit",
         "Saumon Kit",
         "Shawarma Agneau Kit",
         "Shish Taouk Kit",
         "Riz",
+        "Quinoa",
     ],
     "Plats Individus": [
         "Lamb Shawarma Plate",
@@ -60,6 +61,8 @@ ITEMS = {
         "Mix Plate — Shish Taouk + Lamb",
         "Salmon Plate",
         "Hummus Shawarma — Lamb",
+        "Falafel",
+        "Cauliflower",
     ],
     "Sandwiches": [
         "Crispy Taouk",
@@ -74,6 +77,7 @@ ITEMS = {
         "Strawberry Almond Cookie",
         "Pistachio Baklava Cookie",
         "Date Cookie",
+        "Cookies Kit",
     ],
 }
 
