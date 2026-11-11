@@ -31,10 +31,10 @@ ALLERGIES = [
 ITEMS = {
     "Salades": [
         "Classic Fattouch",
-        "For Fattouch",
         "Zesty Fattouch",
-        "For Zesty",
         "Chou Frisé Kale",
+        "For Fattouch",
+        "For Zesty",
     ],
     "Mezzes": [
         "Yalanji",
@@ -82,6 +82,8 @@ ITEMS = {
         "Cookies Kit",
     ],
 }
+
+NOTES = {"For Fattouch", "For Zesty"}
 
 TEAL = "#6EAFC0"
 LABEL_W = 3 * inch
@@ -353,7 +355,8 @@ st.markdown(
     div[class*="st-key-choice_"] button,
     div[class*="st-key-allergy_"] button,
     div[class*="st-key-category_"] button,
-    div[class*="st-key-item_"] button {
+    div[class*="st-key-item_"] button,
+    div[class*="st-key-note_"] button {
         width: 100%;
         background: transparent;
         color: #17233A;
@@ -374,10 +377,19 @@ st.markdown(
         font-size: 22px;
         font-weight: 600;
     }
+    div[class*="st-key-note_"] button,
+    div[class*="st-key-note_"] button p {
+        font-family: Georgia, "Palatino Linotype", Palatino, serif;
+        font-style: italic;
+        font-weight: 500;
+        font-size: 20px;
+        letter-spacing: 0.01em;
+    }
     div[class*="st-key-choice_"] button:hover,
     div[class*="st-key-allergy_"] button:hover,
     div[class*="st-key-category_"] button:hover,
-    div[class*="st-key-item_"] button:hover {
+    div[class*="st-key-item_"] button:hover,
+    div[class*="st-key-note_"] button:hover {
         color: #2C6E78;
         border-bottom-color: #17233A;
         background: transparent;
@@ -606,5 +618,6 @@ else:
                 st.rerun()
     elif st.session_state.category in ITEMS:
         for index, label in enumerate(ITEMS[st.session_state.category]):
-            if st.button(label, key=f"item_{index}", use_container_width=True):
+            key = f"note_{index}" if label in NOTES else f"item_{index}"
+            if st.button(label, key=key, use_container_width=True):
                 open_sticker(label, "items")
