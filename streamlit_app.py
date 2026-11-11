@@ -34,6 +34,10 @@ ITEMS = {
         "Zesty Fattouch",
         "Chou Frisé Kale",
     ],
+    "Dressing": [
+        "For Fattouch",
+        "For Zesty",
+    ],
     "Mezzes": [
         "Yalanji",
         "Kibbeh Pistaches",
