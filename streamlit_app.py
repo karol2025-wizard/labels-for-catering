@@ -31,7 +31,9 @@ ALLERGIES = [
 ITEMS = {
     "Salades": [
         "Classic Fattouch",
+        "For Fattouch",
         "Zesty Fattouch",
+        "For Zesty",
         "Chou Frisé Kale",
     ],
     "Mezzes": [
@@ -79,11 +81,6 @@ ITEMS = {
         "Date Cookie",
         "Cookies Kit",
     ],
-}
-
-SUBTITLES = {
-    "Classic Fattouch": "For Fattouch",
-    "Zesty Fattouch": "For Zesty",
 }
 
 TEAL = "#6EAFC0"
@@ -201,9 +198,6 @@ def label_markup(name: str, kicker: str, inverted: bool) -> str:
         if not kicker:
             size += " label-solo"
         name_html = f'<div class="{size}">{html.escape(lines[0])}</div>'
-        note = SUBTITLES.get(name)
-        if note:
-            name_html += f'<div class="label-note">{html.escape(note)}</div>'
     else:
         name_html = (
             f'<div class="label-name label-name-two">{html.escape(lines[0])}</div>'
@@ -298,7 +292,6 @@ body {{ position: relative; }}
 .label-solo {{ font-size: 20pt; }}
 .label-name-two {{ font-size: 13pt; }}
 .label-name-sub {{ font-size: 11pt; margin-top: 1px; }}
-.label-note {{ font-size: 12pt; font-weight: 700; line-height: 1; margin-top: 2px; white-space: nowrap; }}
 </style>
 </head>
 <body>
@@ -457,7 +450,6 @@ st.markdown(
     .label-name-long { font-size: 12pt; }
     .label-name-two { font-size: 13pt; white-space: nowrap; }
     .label-name-sub { font-size: 11pt; margin-top: 1px; white-space: nowrap; }
-    .label-note { font-size: 12pt; font-weight: 700; line-height: 1; margin-top: 2px; white-space: nowrap; }
     a.print-link {
         display: block;
         width: min(100%, 7.5in);
