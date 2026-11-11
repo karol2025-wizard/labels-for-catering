@@ -199,6 +199,8 @@ def label_markup(name: str, kicker: str, inverted: bool) -> str:
             size = "label-name"
         if not kicker:
             size += " label-solo"
+        if name in NOTES:
+            size += " label-script"
         name_html = f'<div class="{size}">{html.escape(lines[0])}</div>'
     else:
         name_html = (
@@ -294,6 +296,12 @@ body {{ position: relative; }}
 .label-solo {{ font-size: 20pt; }}
 .label-name-two {{ font-size: 13pt; }}
 .label-name-sub {{ font-size: 11pt; margin-top: 1px; }}
+.label-name.label-script {{
+  font-family: Georgia, "Palatino Linotype", Palatino, serif;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}}
 </style>
 </head>
 <body>
@@ -462,6 +470,12 @@ st.markdown(
     .label-name-long { font-size: 12pt; }
     .label-name-two { font-size: 13pt; white-space: nowrap; }
     .label-name-sub { font-size: 11pt; margin-top: 1px; white-space: nowrap; }
+    .label-name.label-script {
+        font-family: Georgia, "Palatino Linotype", Palatino, serif;
+        font-style: italic;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+    }
     a.print-link {
         display: block;
         width: min(100%, 7.5in);
