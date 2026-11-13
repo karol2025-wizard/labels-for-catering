@@ -88,6 +88,13 @@ ITEMS = {
 
 NOTES = {"For Fattouch", "For Zesty", "Fried Pita"}
 
+RICE_KITS = {
+    "Crispy Taouk Kit",
+    "Saumon Kit",
+    "Shawarma Agneau Kit",
+    "Shish Taouk Kit",
+}
+
 SKIP_ORDER_ITEMS = ("yalanji", "chou-fleur", "chou fleur", "trempette")
 
 
@@ -182,6 +189,8 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
         sticker = _sticker_for_item(raw_name)
         if sticker:
             queue.append((sticker, quantity))
+            if sticker in RICE_KITS:
+                queue.append(("Riz", quantity))
         else:
             left_out.append(raw_name)
         while index < len(lines) and not re.fullmatch(r"\d+x", lines[index]) and "MANAGER" not in lines[index]:
@@ -815,11 +824,15 @@ elif st.session_state.screen == "sticker":
         st.rerun()
     inverted = st.session_state.sticker_from == "allergies"
     kicker = "Allergie" if inverted else ""
-    st.markdown(
-        sticker_html(st.session_state.sticker_name, kicker, inverted),
-        unsafe_allow_html=True,
-    )
-    imprimer_button(print_page(st.session_state.sticker_name, kicker, inverted))
+    names = [st.session_state.sticker_name]
+    if st.session_state.sticker_name in RICE_KITS:
+        names.append("Riz")
+    for name in names:
+        st.markdown(sticker_html(name, kicker, inverted), unsafe_allow_html=True)
+    if len(names) == 1:
+        imprimer_button(print_page(names[0], kicker, inverted))
+    else:
+        imprimer_button(print_batch(names))
 elif st.session_state.screen == "order":
     if st.button("Retour", key="back"):
         st.session_state.screen = "home"
