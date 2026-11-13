@@ -1,6 +1,8 @@
 import base64
 import html
 import os
+import re
+import zlib
 from io import BytesIO
 
 import streamlit as st
@@ -35,6 +37,7 @@ ITEMS = {
         "Chou Frisé Kale",
         "For Fattouch",
         "For Zesty",
+        "Fried Pita",
     ],
     "Mezzes": [
         "Yalanji",
@@ -83,7 +86,121 @@ ITEMS = {
     ],
 }
 
-NOTES = {"For Fattouch", "For Zesty"}
+NOTES = {"For Fattouch", "For Zesty", "Fried Pita"}
+
+SKIP_ORDER_ITEMS = ("yalanji", "chou-fleur", "chou fleur", "trempette")
+
+
+def _pdf_lines(data: bytes) -> list[str]:
+    lines = []
+    for stream in re.findall(rb"stream\r?\n(.*?)\r?\nendstream", data, re.S):
+        try:
+            text = zlib.decompress(stream).decode("latin1")
+        except zlib.error:
+            continue
+        for block in re.findall(r"\[(.*?)\] TJ", text, re.S):
+            parts = re.findall(r"<([0-9A-Fa-f]+)>", block)
+            if not parts:
+                continue
+            line = bytes.fromhex("".join(parts)).decode("latin1").strip()
+            if line:
+                lines.append(line)
+    return lines
+
+
+def _skip_order_item(name: str) -> bool:
+    folded = name.lower()
+    return any(token in folded for token in SKIP_ORDER_ITEMS)
+
+
+def _sticker_for_item(name: str) -> str | None:
+    if _skip_order_item(name):
+        return None
+    folded = name.lower()
+    folded = re.sub(r"\s*\(traiteur\)", "", folded)
+    folded = re.sub(r"\s*-\s*traiteur\s*$", "", folded)
+    folded = re.sub(r"\s*-\s*\d+\s*pcs", "", folded)
+    folded = re.sub(r"\s+", " ", folded).strip(" -")
+    if "fattouch" in folded and "zesty" in folded:
+        return "Zesty Fattouch"
+    if "fattouch" in folded:
+        return "Classic Fattouch"
+    if "kibbeh" in folded:
+        return "Kibbeh Pistaches"
+    if "shish taouk" in folded and "kit" in folded:
+        return "Shish Taouk Kit"
+    if "shawarma" in folded and "agneau" in folded and "kit" in folded:
+        return "Shawarma Agneau Kit"
+    if "crispy taouk" in folded and "kit" in folded:
+        return "Crispy Taouk Kit"
+    if "saumon" in folded and "kit" in folded:
+        return "Saumon Kit"
+    if folded == "riz":
+        return "Riz"
+    if "quinoa" in folded:
+        return "Quinoa"
+    return None
+
+
+def _sticker_for_component(parent: str | None, name: str) -> str | None:
+    if not parent:
+        return None
+    folded = name.lower()
+    if "fried pita" in folded:
+        return "Fried Pita"
+    if "dressing" in folded:
+        if parent == "Zesty Fattouch":
+            return "For Zesty"
+        if parent == "Classic Fattouch":
+            return "For Fattouch"
+    return None
+
+
+def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
+    lines = _pdf_lines(data)
+    order_id = next((line for line in lines if line.startswith("FOL-") and "MANAGER" not in line), "")
+    try:
+        index = lines.index("ARTICLES") + 1
+    except ValueError:
+        return order_id, [], []
+    queue: list[tuple[str, int]] = []
+    left_out: list[str] = []
+    while index < len(lines):
+        line = lines[index]
+        if "MANAGER" in line or line.startswith("Sous-total"):
+            break
+        qty_match = re.fullmatch(r"(\d+)x", line)
+        if not qty_match:
+            index += 1
+            continue
+        quantity = int(qty_match.group(1))
+        index += 1
+        if index >= len(lines):
+            break
+        raw_name = lines[index]
+        index += 1
+        sticker = _sticker_for_item(raw_name)
+        if sticker:
+            queue.append((sticker, quantity))
+        else:
+            left_out.append(raw_name)
+        while index < len(lines) and not re.fullmatch(r"\d+x", lines[index]) and "MANAGER" not in lines[index]:
+            if re.fullmatch(r"\d+", lines[index]):
+                component_qty = int(lines[index])
+                index += 1
+                if index >= len(lines):
+                    break
+                component = lines[index]
+                index += 1
+                child = _sticker_for_component(sticker, component)
+                if child:
+                    queue.append((child, component_qty))
+                elif sticker:
+                    left_out.append(component)
+            else:
+                index += 1
+    return order_id, queue, left_out
+
 
 TEAL = "#6EAFC0"
 LABEL_W = 3 * inch
@@ -311,6 +428,121 @@ body {{ position: relative; }}
 </html>"""
 
 
+def print_batch(names: list[str]) -> str:
+    font = base64.b64encode(
+        open(os.path.join(FONT_DIR, "Outfit-Bold.ttf"), "rb").read()
+    ).decode("ascii")
+    labels = "".join(label_markup(name, "", False) for name in names)
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Etiquettes</title>
+<style>
+@font-face {{
+  font-family: Outfit;
+  font-weight: 700;
+  src: url(data:font/ttf;base64,{font}) format("truetype");
+}}
+@page {{ size: 3in 1in; margin: 0; }}
+html, body {{
+  margin: 0;
+  background: #ffffff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}}
+.label {{
+  position: relative;
+  width: 3in;
+  height: 1in;
+  box-sizing: border-box;
+  background: #ffffff;
+  color: #111111;
+  display: flex;
+  align-items: center;
+  gap: 0.1in;
+  padding: 0.08in 0.12in 0.08in 0.1in;
+  font-family: Outfit, Arial, sans-serif;
+  overflow: hidden;
+  break-after: page;
+  page-break-after: always;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}}
+.label:last-child {{ break-after: auto; page-break-after: auto; }}
+.label-copy {{ display: flex; flex-direction: column; justify-content: center; }}
+.label-name {{ font-size: 16pt; font-weight: 700; letter-spacing: -0.03em; line-height: 1.02; white-space: nowrap; }}
+.label-name-medium {{ font-size: 13.5pt; }}
+.label-name-long {{ font-size: 12pt; }}
+.label-solo {{ font-size: 20pt; }}
+.label-name-two {{ font-size: 13pt; }}
+.label-name-sub {{ font-size: 11pt; margin-top: 1px; }}
+.label-name.label-script {{
+  font-family: Georgia, "Palatino Linotype", Palatino, serif;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}}
+</style>
+</head>
+<body>
+{labels}
+</body>
+</html>"""
+
+
+def imprimer_button(page: str) -> None:
+    encoded = base64.b64encode(page.encode("utf-8")).decode("ascii")
+    components.html(
+        f"""
+        <button id="print" type="button">Imprimer</button>
+        <script>
+          const page = atob("{encoded}");
+          const parentDoc = window.parent.document;
+          let frame = parentDoc.getElementById("label-print-frame");
+          if (frame) frame.remove();
+          frame = parentDoc.createElement("iframe");
+          frame.id = "label-print-frame";
+          frame.setAttribute("style", "position:fixed;width:3in;height:1in;border:0;left:0;top:0;transform:translate(-120vw,0);pointer-events:none;");
+          let ready = false;
+          frame.onload = () => {{
+            const fonts = frame.contentWindow.document.fonts;
+            const mark = () => {{ ready = true; }};
+            if (fonts && fonts.ready) fonts.ready.then(mark);
+            else mark();
+          }};
+          parentDoc.body.appendChild(frame);
+          frame.srcdoc = page;
+          document.getElementById("print").onclick = () => {{
+            const go = () => {{
+              frame.contentWindow.focus();
+              frame.contentWindow.print();
+            }};
+            if (ready) go();
+            else {{
+              const fonts = frame.contentWindow.document.fonts;
+              (fonts && fonts.ready ? fonts.ready : Promise.resolve()).then(go);
+            }}
+          }};
+        </script>
+        <style>
+          html, body {{ margin: 0; background: #E4DFD3; }}
+          #print {{
+            width: 100%;
+            height: 44px;
+            border: 1px solid rgba(23, 35, 58, 0.2);
+            border-radius: 8px;
+            background: #F6F2E9;
+            color: #17233A;
+            font: 600 16px "Segoe UI", sans-serif;
+            cursor: pointer;
+          }}
+        </style>
+        """,
+        height=52,
+    )
+
+
 if "screen" not in st.session_state:
     st.session_state.screen = "home"
 if "category" not in st.session_state:
@@ -470,6 +702,30 @@ st.markdown(
     .label-name-long { font-size: 12pt; }
     .label-name-two { font-size: 13pt; white-space: nowrap; }
     .label-name-sub { font-size: 11pt; margin-top: 1px; white-space: nowrap; }
+    .queue-row {
+        display: flex;
+        gap: 16px;
+        align-items: baseline;
+        min-height: 52px;
+        border-bottom: 1px solid rgba(23, 35, 58, 0.18);
+        color: #17233A;
+        font-size: 22px;
+        font-weight: 600;
+        padding: 12px 4px;
+    }
+    .queue-row span { min-width: 28px; }
+    .queue-note {
+        font-family: Georgia, "Palatino Linotype", Palatino, serif;
+        font-style: italic;
+        font-weight: 500;
+        font-size: 20px;
+    }
+    .queue-aside {
+        margin: 18px 4px 0;
+        color: #17233A;
+        font-size: 14px;
+        line-height: 1.4;
+    }
     .label-name.label-script {
         font-family: Georgia, "Palatino Linotype", Palatino, serif;
         font-style: italic;
@@ -550,6 +806,9 @@ if st.session_state.screen == "home":
     if st.button("Articles", key="choice_articles", use_container_width=True):
         st.session_state.screen = "articles"
         st.rerun()
+    if st.button("Commande", key="choice_order", use_container_width=True):
+        st.session_state.screen = "order"
+        st.rerun()
 elif st.session_state.screen == "sticker":
     if st.button("Retour", key="back"):
         st.session_state.screen = st.session_state.sticker_from
@@ -560,57 +819,31 @@ elif st.session_state.screen == "sticker":
         sticker_html(st.session_state.sticker_name, kicker, inverted),
         unsafe_allow_html=True,
     )
-    page = base64.b64encode(
-        print_page(st.session_state.sticker_name, kicker, inverted).encode("utf-8")
-    ).decode("ascii")
-    components.html(
-        f"""
-        <button id="print" type="button">Imprimer</button>
-        <script>
-          const page = atob("{page}");
-          const parentDoc = window.parent.document;
-          let frame = parentDoc.getElementById("label-print-frame");
-          if (frame) frame.remove();
-          frame = parentDoc.createElement("iframe");
-          frame.id = "label-print-frame";
-          frame.setAttribute("style", "position:fixed;width:3in;height:1in;border:0;left:0;top:0;transform:translate(-120vw,0);pointer-events:none;");
-          let ready = false;
-          frame.onload = () => {{
-            const fonts = frame.contentWindow.document.fonts;
-            const mark = () => {{ ready = true; }};
-            if (fonts && fonts.ready) fonts.ready.then(mark);
-            else mark();
-          }};
-          parentDoc.body.appendChild(frame);
-          frame.srcdoc = page;
-          document.getElementById("print").onclick = () => {{
-            const go = () => {{
-              frame.contentWindow.focus();
-              frame.contentWindow.print();
-            }};
-            if (ready) go();
-            else {{
-              const fonts = frame.contentWindow.document.fonts;
-              (fonts && fonts.ready ? fonts.ready : Promise.resolve()).then(go);
-            }}
-          }};
-        </script>
-        <style>
-          html, body {{ margin: 0; background: #E4DFD3; }}
-          #print {{
-            width: 100%;
-            height: 44px;
-            border: 1px solid rgba(23, 35, 58, 0.2);
-            border-radius: 8px;
-            background: #F6F2E9;
-            color: #17233A;
-            font: 600 16px "Segoe UI", sans-serif;
-            cursor: pointer;
-          }}
-        </style>
-        """,
-        height=52,
-    )
+    imprimer_button(print_page(st.session_state.sticker_name, kicker, inverted))
+elif st.session_state.screen == "order":
+    if st.button("Retour", key="back"):
+        st.session_state.screen = "home"
+        st.rerun()
+    uploaded = st.file_uploader("PDF de la commande", type=["pdf"])
+    if uploaded is not None:
+        order_id, queue, left_out = order_stickers(uploaded.getvalue())
+        if order_id:
+            st.markdown(f'<p class="brand-kicker">{html.escape(order_id)}</p>', unsafe_allow_html=True)
+        if queue:
+            rows = []
+            for name, count in queue:
+                note = " queue-note" if name in NOTES else ""
+                rows.append(
+                    f'<div class="queue-row{note}"><span>{count}</span>{html.escape(name)}</div>'
+                )
+            st.markdown("".join(rows), unsafe_allow_html=True)
+            copies = [name for name, count in queue for _ in range(count)]
+            imprimer_button(print_batch(copies))
+        else:
+            st.markdown('<p class="queue-aside">Aucune étiquette dans ce PDF.</p>', unsafe_allow_html=True)
+        if left_out:
+            names = ", ".join(html.escape(name) for name in left_out)
+            st.markdown(f'<p class="queue-aside">Non imprimé : {names}</p>', unsafe_allow_html=True)
 else:
     if st.button("Retour", key="back"):
         if st.session_state.screen == "items":
