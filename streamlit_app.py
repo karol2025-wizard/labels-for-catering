@@ -244,6 +244,7 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
         else:
             left_out.append(detail or raw_name)
         parent = _component_parent(stickers[0] if stickers else None)
+        saw_accompaniment = False
         while index < len(lines) and not re.fullmatch(r"\d+x", lines[index]) and "MANAGER" not in lines[index]:
             if re.fullmatch(r"\d+", lines[index]):
                 component_qty = int(lines[index])
@@ -255,10 +256,15 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
                 child = _sticker_for_component(parent, component)
                 if child:
                     queue.append((child, component_qty))
+                    saw_accompaniment = True
                 elif parent:
                     left_out.append(component)
             else:
                 index += 1
+        if parent in {"Classic Fattouch", "Zesty Fattouch"} and not saw_accompaniment:
+            dressing = "For Zesty" if parent == "Zesty Fattouch" else "For Fattouch"
+            queue.append(("Fried Pita", quantity * 2))
+            queue.append((dressing, quantity * 2))
     return order_id, queue, left_out
 
 
