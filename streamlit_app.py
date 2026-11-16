@@ -37,7 +37,6 @@ ITEMS = {
         "Chou Frisé Kale",
         "For Fattouch",
         "For Zesty",
-        "Fried Pita",
     ],
     "Mezzes": [
         "Yalanji",
@@ -86,7 +85,7 @@ ITEMS = {
     ],
 }
 
-NOTES = {"For Fattouch", "For Zesty", "Fried Pita"}
+NOTES = {"For Fattouch", "For Zesty"}
 
 RICE_KITS = {
     "Crispy Taouk Kit",
@@ -196,13 +195,10 @@ def _sticker_for_component(parent: str | None, name: str) -> str | None:
     if not parent:
         return None
     folded = name.lower()
-    if "fried pita" in folded:
-        return "Fried Pita"
-    if "dressing" in folded:
+    if "fried pita" in folded or "dressing" in folded:
         if parent == "Zesty Fattouch":
             return "For Zesty"
-        if parent == "Classic Fattouch":
-            return "For Fattouch"
+        return "For Fattouch"
     return None
 
 
@@ -261,9 +257,14 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
                 index += 1
         if parent in {"Classic Fattouch", "Zesty Fattouch"} and not saw_accompaniment:
             dressing = "For Zesty" if parent == "Zesty Fattouch" else "For Fattouch"
-            queue.append(("Fried Pita", quantity))
-            queue.append((dressing, quantity))
-    return order_id, queue, left_out
+            queue.append((dressing, quantity * 2))
+    merged: list[tuple[str, int]] = []
+    for name, count in queue:
+        if merged and merged[-1][0] == name:
+            merged[-1] = (name, merged[-1][1] + count)
+        else:
+            merged.append((name, count))
+    return order_id, merged, left_out
 
 
 TEAL = "#6EAFC0"
