@@ -146,8 +146,6 @@ def _sticker_for_item(name: str) -> str | None:
         return "Riz"
     if "quinoa" in folded:
         return "Quinoa"
-    if "biscuit" in folded or "cookie" in folded:
-        return "Cookies Kit"
     return None
 
 
@@ -263,8 +261,8 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
                 index += 1
         if parent in {"Classic Fattouch", "Zesty Fattouch"} and not saw_accompaniment:
             dressing = "For Zesty" if parent == "Zesty Fattouch" else "For Fattouch"
-            queue.append(("Fried Pita", quantity * 2))
-            queue.append((dressing, quantity * 2))
+            queue.append(("Fried Pita", quantity))
+            queue.append((dressing, quantity))
     return order_id, queue, left_out
 
 
