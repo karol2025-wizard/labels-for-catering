@@ -28,6 +28,7 @@ ALLERGIES = [
     "Gluten, meat & nuts",
     "Gluten & nuts",
     "Vegan",
+    "Contient des noix",
 ]
 
 ITEMS = {
