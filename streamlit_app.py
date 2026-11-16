@@ -146,7 +146,52 @@ def _sticker_for_item(name: str) -> str | None:
         return "Riz"
     if "quinoa" in folded:
         return "Quinoa"
+    if "biscuit" in folded or "cookie" in folded:
+        return "Cookies Kit"
     return None
+
+
+def _choice_stickers(name: str) -> list[str]:
+    folded = name.lower()
+    if "shish taouk" in folded and "kit" not in folded:
+        return ["Shish Taouk Plate"]
+    if "shawarma" in folded and ("agneau" in folded or "lamb" in folded) and "kit" not in folded:
+        return ["Lamb Shawarma Plate"]
+    if "fattouch" in folded:
+        kind = "Zesty Fattouch" if "zesty" in folded else "Classic Fattouch"
+        extra = ""
+        if "halloumi" in folded:
+            extra = "Halloumi"
+        elif "saumon" in folded or "salmon" in folded:
+            extra = "Saumon"
+        return [f"{kind} — {extra}"] if extra else [kind]
+    mapped = _sticker_for_item(name)
+    return [mapped] if mapped else []
+
+
+def _order_stickers_for(name: str, detail: str | None) -> list[str]:
+    if "assortiment" in name.lower() and detail:
+        return _choice_stickers(detail)
+    mapped = _sticker_for_item(name)
+    return [mapped] if mapped else []
+
+
+def _component_parent(sticker: str | None) -> str | None:
+    if not sticker:
+        return None
+    if sticker.startswith("Classic Fattouch"):
+        return "Classic Fattouch"
+    if sticker.startswith("Zesty Fattouch"):
+        return "Zesty Fattouch"
+    return sticker
+
+
+def _is_detail_line(line: str) -> bool:
+    if re.fullmatch(r"\d+x", line) or re.fullmatch(r"\d+", line):
+        return False
+    if "MANAGER" in line or line.startswith("Sous-total") or line.startswith("!"):
+        return False
+    return True
 
 
 def _sticker_for_component(parent: str | None, name: str) -> str | None:
@@ -186,13 +231,19 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
             break
         raw_name = lines[index]
         index += 1
-        sticker = _sticker_for_item(raw_name)
-        if sticker:
-            queue.append((sticker, quantity))
-            if sticker in RICE_KITS:
-                queue.append(("Riz", quantity))
+        detail = None
+        if "assortiment" in raw_name.lower() and index < len(lines) and _is_detail_line(lines[index]):
+            detail = lines[index]
+            index += 1
+        stickers = _order_stickers_for(raw_name, detail)
+        if stickers:
+            for sticker in stickers:
+                queue.append((sticker, quantity))
+                if sticker in RICE_KITS:
+                    queue.append(("Riz", quantity))
         else:
-            left_out.append(raw_name)
+            left_out.append(detail or raw_name)
+        parent = _component_parent(stickers[0] if stickers else None)
         while index < len(lines) and not re.fullmatch(r"\d+x", lines[index]) and "MANAGER" not in lines[index]:
             if re.fullmatch(r"\d+", lines[index]):
                 component_qty = int(lines[index])
@@ -201,10 +252,10 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
                     break
                 component = lines[index]
                 index += 1
-                child = _sticker_for_component(sticker, component)
+                child = _sticker_for_component(parent, component)
                 if child:
                     queue.append((child, component_qty))
-                elif sticker:
+                elif parent:
                     left_out.append(component)
             else:
                 index += 1
