@@ -39,17 +39,7 @@ ITEMS = {
         "For Zesty",
     ],
     "Mezzes": [
-        "Yalanji",
         "Kibbeh Pistaches",
-        "Chou-Fleur",
-    ],
-    "Dips": [
-        "Hummus",
-        "Mouhammara",
-        "Mutabbal Betteraves",
-        "Mutabbal Aubergine",
-        "Labneh",
-        "Pain Saj",
     ],
     "Kit": [
         "Crispy Taouk Kit",
@@ -94,7 +84,8 @@ RICE_KITS = {
     "Shish Taouk Kit",
 }
 
-SKIP_ORDER_ITEMS = ("yalanji", "chou-fleur", "chou fleur", "trempette")
+SKIP_ORDER_ITEMS = ("yalanji", "trempette", "biscuit", "cookie")
+DIP_WORDS = ("mouhammara", "muhammara", "mutabbal", "labneh", "pain saj")
 
 
 def _pdf_lines(data: bytes) -> list[str]:
@@ -114,47 +105,90 @@ def _pdf_lines(data: bytes) -> list[str]:
     return lines
 
 
-def _skip_order_item(name: str) -> bool:
+def _skip_order_item(name: str, as_plate: bool = False) -> bool:
     folded = name.lower()
-    return any(token in folded for token in SKIP_ORDER_ITEMS)
+    if any(token in folded for token in SKIP_ORDER_ITEMS):
+        return True
+    if "hummus" in folded and "shawarma" not in folded and "plate" not in folded and "plat" not in folded:
+        return True
+    if any(word in folded for word in DIP_WORDS):
+        return True
+    if "chou-fleur" in folded or "chou fleur" in folded:
+        return not as_plate
+    return False
 
 
-def _sticker_for_item(name: str) -> str | None:
-    if _skip_order_item(name):
+def _kit_side(parts: list[str]) -> str:
+    if any("quinoa" in part.lower() for part in parts):
+        return "Quinoa"
+    return "Riz"
+
+
+def _left_out_label(name: str) -> str:
+    folded = name.lower()
+    if ("biscuit" in folded or "cookie" in folded) and "noix" not in folded:
+        return f"{name} — contient des noix"
+    return name
+
+
+def _sticker_for_item(name: str, as_plate: bool = False) -> str | None:
+    if _skip_order_item(name, as_plate):
         return None
     folded = name.lower()
+    has_chicken = "chicken" in folded or "poulet" in folded
+    has_lamb = "lamb" in folded or "agneau" in folded
+    folded = re.sub(r"\s*\(.*?\)", " ", folded)
     folded = re.sub(r"\s*\(traiteur\)", "", folded)
     folded = re.sub(r"\s*-\s*traiteur\s*$", "", folded)
     folded = re.sub(r"\s*-\s*\d+\s*pcs", "", folded)
     folded = re.sub(r"\s+", " ", folded).strip(" -")
+    as_plate = as_plate or "plate" in folded or "plat" in folded
     if "fattouch" in folded and "zesty" in folded:
         return "Zesty Fattouch"
     if "fattouch" in folded:
         return "Classic Fattouch"
     if "kibbeh" in folded:
         return "Kibbeh Pistaches"
+    if "kale" in folded or "chou fris" in folded:
+        return "Chou Frisé Kale"
+    if "shish" in folded and has_lamb and "kit" not in folded:
+        return "Mix Plate — Shish Taouk + Lamb"
     if "shish taouk" in folded and "kit" in folded:
         return "Shish Taouk Kit"
-    if "shawarma" in folded and "agneau" in folded and "kit" in folded:
-        return "Shawarma Agneau Kit"
-    if "crispy taouk" in folded and "kit" in folded:
+    if "shish taouk" in folded:
+        return "Shish Taouk Plate" if as_plate else "Shish Taouk"
+    if "crispy" in folded and "taouk" in folded and "kit" in folded:
         return "Crispy Taouk Kit"
-    if "saumon" in folded and "kit" in folded:
+    if "crispy" in folded and "taouk" in folded:
+        return "Crispy Taouk"
+    if "shawarma" in folded and "hummus" in folded:
+        return "Hummus Shawarma — Lamb"
+    if "shawarma" in folded and has_lamb and "kit" in folded:
+        return "Shawarma Agneau Kit"
+    if "shawarma" in folded and has_lamb:
+        return "Lamb Shawarma Plate" if as_plate else "Shawarma — Lamb"
+    if "shawarma" in folded and has_chicken:
+        return "Shawarma — Chicken"
+    if ("saumon" in folded or "salmon" in folded) and "kit" in folded:
         return "Saumon Kit"
-    if folded == "riz":
+    if "saumon" in folded or "salmon" in folded:
+        return "Salmon Plate"
+    if "falafel" in folded:
+        return "Falafel"
+    if "halloumi" in folded:
+        return "Halloumi"
+    if "cauliflower" in folded or "chou-fleur" in folded or "chou fleur" in folded:
+        return "Cauliflower"
+    if folded == "riz" or folded == "rice":
         return "Riz"
     if "quinoa" in folded:
         return "Quinoa"
     return None
 
 
-def _choice_stickers(name: str) -> list[str]:
+def _choice_stickers(name: str, as_plate: bool = False) -> list[str]:
     folded = name.lower()
-    if "shish taouk" in folded and "kit" not in folded:
-        return ["Shish Taouk Plate"]
-    if "shawarma" in folded and ("agneau" in folded or "lamb" in folded) and "kit" not in folded:
-        return ["Lamb Shawarma Plate"]
-    if "fattouch" in folded:
+    if "fattouch" in folded and not _skip_order_item(name, as_plate):
         kind = "Zesty Fattouch" if "zesty" in folded else "Classic Fattouch"
         extra = ""
         if "halloumi" in folded:
@@ -162,15 +196,15 @@ def _choice_stickers(name: str) -> list[str]:
         elif "saumon" in folded or "salmon" in folded:
             extra = "Saumon"
         return [f"{kind} — {extra}"] if extra else [kind]
-    mapped = _sticker_for_item(name)
+    mapped = _sticker_for_item(name, as_plate)
     return [mapped] if mapped else []
 
 
 def _order_stickers_for(name: str, detail: str | None) -> list[str]:
+    as_plate = "plat" in name.lower()
     if "assortiment" in name.lower() and detail:
-        return _choice_stickers(detail)
-    mapped = _sticker_for_item(name)
-    return [mapped] if mapped else []
+        return _choice_stickers(detail, as_plate=as_plate)
+    return _choice_stickers(name, as_plate=as_plate)
 
 
 def _component_parent(sticker: str | None) -> str | None:
@@ -230,31 +264,38 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
             detail = lines[index]
             index += 1
         stickers = _order_stickers_for(raw_name, detail)
-        if stickers:
-            for sticker in stickers:
-                queue.append((sticker, quantity))
-                if sticker in RICE_KITS:
-                    queue.append(("Riz", quantity))
-        else:
-            left_out.append(detail or raw_name)
-        parent = _component_parent(stickers[0] if stickers else None)
-        saw_accompaniment = False
+        side_notes = [raw_name, detail or ""]
+        components: list[tuple[int, str]] = []
         while index < len(lines) and not re.fullmatch(r"\d+x", lines[index]) and "MANAGER" not in lines[index]:
             if re.fullmatch(r"\d+", lines[index]):
                 component_qty = int(lines[index])
                 index += 1
                 if index >= len(lines):
                     break
-                component = lines[index]
+                components.append((component_qty, lines[index]))
+                side_notes.append(lines[index])
                 index += 1
-                child = _sticker_for_component(parent, component)
-                if child:
-                    queue.append((child, component_qty))
-                    saw_accompaniment = True
-                elif parent:
-                    left_out.append(component)
             else:
+                side_notes.append(lines[index])
                 index += 1
+        if stickers:
+            for sticker in stickers:
+                queue.append((sticker, quantity))
+                if sticker in RICE_KITS:
+                    queue.append((_kit_side(side_notes), quantity))
+        else:
+            left_out.append(_left_out_label(detail or raw_name))
+        parent = _component_parent(stickers[0] if stickers else None)
+        saw_accompaniment = False
+        for component_qty, component in components:
+            if any(word in component.lower() for word in ("quinoa", "riz", "rice")) and stickers and stickers[0] in RICE_KITS:
+                continue
+            child = _sticker_for_component(parent, component)
+            if child:
+                queue.append((child, component_qty))
+                saw_accompaniment = True
+            elif parent and not _skip_order_item(component, as_plate=False):
+                left_out.append(_left_out_label(component))
         if parent in {"Classic Fattouch", "Zesty Fattouch"} and not saw_accompaniment:
             dressing = "For Zesty" if parent == "Zesty Fattouch" else "For Fattouch"
             queue.append((dressing, quantity * 2))
