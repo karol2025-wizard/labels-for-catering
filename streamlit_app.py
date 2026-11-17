@@ -148,7 +148,8 @@ def _sticker_for_item(name: str, as_plate: bool = False) -> str | None:
         return "Zesty Fattouch"
     if "fattouch" in folded:
         return "Classic Fattouch"
-    if "kibbeh" in folded:
+    plain = folded.replace("é", "e").replace("è", "e").replace("ê", "e")
+    if "kibbe" in plain or "kebbe" in plain:
         return "Kibbeh Pistaches"
     if "kale" in folded or "chou fris" in folded:
         return "Chou Frisé Kale"
@@ -267,6 +268,7 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
         stickers = _order_stickers_for(raw_name, detail)
         side_notes = [raw_name, detail or ""]
         components: list[tuple[int, str]] = []
+        notes: list[str] = []
         while index < len(lines) and not re.fullmatch(r"\d+x", lines[index]) and "MANAGER" not in lines[index]:
             if re.fullmatch(r"\d+", lines[index]):
                 component_qty = int(lines[index])
@@ -277,6 +279,7 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
                 side_notes.append(lines[index])
                 index += 1
             else:
+                notes.append(lines[index])
                 side_notes.append(lines[index])
                 index += 1
         if stickers:
@@ -284,10 +287,9 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
                 queue.append((sticker, quantity))
                 if sticker in RICE_KITS:
                     queue.append((_kit_side(side_notes), quantity))
-        else:
-            left_out.append(_left_out_label(detail or raw_name))
         parent = _component_parent(stickers[0] if stickers else None)
         saw_accompaniment = False
+        printed_extra = False
         for component_qty, component in components:
             if any(word in component.lower() for word in ("quinoa", "riz", "rice")) and stickers and stickers[0] in RICE_KITS:
                 continue
@@ -295,8 +297,22 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
             if child:
                 queue.append((child, component_qty))
                 saw_accompaniment = True
-            elif parent and not _skip_order_item(component, as_plate=False):
-                left_out.append(_left_out_label(component))
+            else:
+                mapped = _sticker_for_item(component)
+                if mapped:
+                    queue.append((mapped, component_qty))
+                    printed_extra = True
+                elif parent and not _skip_order_item(component, as_plate=False):
+                    left_out.append(_left_out_label(component))
+        for note in notes:
+            if note.startswith("!"):
+                continue
+            mapped = _sticker_for_item(note)
+            if mapped and mapped not in {"Riz", "Quinoa"}:
+                queue.append((mapped, quantity))
+                printed_extra = True
+        if not stickers and not printed_extra:
+            left_out.append(_left_out_label(detail or raw_name))
         if parent in {"Classic Fattouch", "Zesty Fattouch"} and not saw_accompaniment:
             dressing = "For Zesty" if parent == "Zesty Fattouch" else "For Fattouch"
             queue.append((dressing, quantity * 2))
