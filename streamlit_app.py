@@ -20,69 +20,69 @@ st.set_page_config(
 )
 
 ALLERGIES = [
-    "Dairy",
-    "Dairy & nuts",
-    "Vegan & nuts",
-    "Vegan & gluten",
-    "Gluten, meat & dairy",
-    "Gluten, meat & nuts",
-    "Gluten & nuts",
-    "Vegan",
+    "Lait",
+    "Lait et noix",
+    "Végan et noix",
+    "Végan et gluten",
+    "Gluten, viande et lait",
+    "Gluten, viande et noix",
+    "Gluten et noix",
+    "Végan",
     "Contient des noix",
 ]
 
 ITEMS = {
     "Salades": [
-        "Classic Fattouch",
-        "Zesty Fattouch",
-        "Chou Frisé Kale",
-        "For Fattouch",
-        "For Zesty",
+        "Fattouch Classique",
+        "Fattouch Zesté",
+        "Chou Frisé",
+        "Pour Fattouch",
+        "Pour Zesté",
     ],
     "Mezzes": [
         "Kibbeh Pistaches",
     ],
     "Kit": [
-        "Crispy Taouk Kit",
-        "Saumon Kit",
-        "Shawarma Agneau Kit",
-        "Shish Taouk Kit",
+        "Kit Taouk Croustillant",
+        "Kit Saumon",
+        "Kit Shawarma Agneau",
+        "Kit Shish Taouk",
         "Riz",
         "Quinoa",
     ],
     "Plats Individus": [
-        "Lamb Shawarma Plate",
-        "Shish Taouk Plate",
-        "Mix Plate — Shish Taouk + Lamb",
-        "Salmon Plate",
-        "Hummus Shawarma — Lamb",
-        "Falafel",
-        "Cauliflower",
+        "Assiette Shawarma Agneau",
+        "Assiette Shish Taouk",
+        "Assiette Mixte — Shish Taouk + Agneau",
+        "Assiette Saumon",
+        "Shawarma Hummus — Agneau",
+        "Assiette Falafel",
+        "Assiette Chou-Fleur",
     ],
     "Sandwiches": [
-        "Crispy Taouk",
+        "Taouk Croustillant",
         "Shish Taouk",
-        "Shawarma — Lamb",
-        "Cauliflower",
+        "Shawarma — Agneau",
+        "Chou-Fleur",
         "Falafel",
-        "Shawarma — Chicken",
+        "Shawarma — Poulet",
         "Halloumi",
     ],
     "Dessert": [
-        "Strawberry Almond Cookie",
-        "Pistachio Baklava Cookie",
-        "Date Cookie",
-        "Cookies Kit",
+        "Biscuit Fraise Amande",
+        "Biscuit Baklava Pistache",
+        "Biscuit Datte",
+        "Kit Biscuits",
     ],
 }
 
-NOTES = {"For Fattouch", "For Zesty"}
+NOTES = {"Pour Fattouch", "Pour Zesté"}
 
 RICE_KITS = {
-    "Crispy Taouk Kit",
-    "Saumon Kit",
-    "Shawarma Agneau Kit",
-    "Shish Taouk Kit",
+    "Kit Taouk Croustillant",
+    "Kit Saumon",
+    "Kit Shawarma Agneau",
+    "Kit Shish Taouk",
 }
 
 SKIP_ORDER_ITEMS = ("yalanji", "trempette", "biscuit", "cookie")
@@ -144,43 +144,44 @@ def _sticker_for_item(name: str, as_plate: bool = False) -> str | None:
     folded = re.sub(r"\s*-\s*\d+\s*pcs", "", folded)
     folded = re.sub(r"\s+", " ", folded).strip(" -")
     as_plate = as_plate or "plate" in folded or "plat" in folded
-    if "fattouch" in folded and "zesty" in folded:
-        return "Zesty Fattouch"
+    if "fattouch" in folded and "zest" in folded:
+        return "Fattouch Zesté"
     if "fattouch" in folded:
-        return "Classic Fattouch"
+        return "Fattouch Classique"
     plain = folded.replace("é", "e").replace("è", "e").replace("ê", "e")
     if "kibbe" in plain or "kebbe" in plain:
         return "Kibbeh Pistaches"
     if "kale" in folded or "chou fris" in folded:
-        return "Chou Frisé Kale"
+        return "Chou Frisé"
+    crispy = "crispy" in folded or "croustillant" in folded
     if "shish" in folded and has_lamb and "kit" not in folded:
-        return "Mix Plate — Shish Taouk + Lamb"
+        return "Assiette Mixte — Shish Taouk + Agneau"
     if "shish taouk" in folded and "kit" in folded:
-        return "Shish Taouk Kit"
+        return "Kit Shish Taouk"
     if "shish taouk" in folded:
-        return "Shish Taouk Plate" if as_plate else "Shish Taouk"
-    if "crispy" in folded and "taouk" in folded and "kit" in folded:
-        return "Crispy Taouk Kit"
-    if "crispy" in folded and "taouk" in folded:
-        return "Crispy Taouk"
+        return "Assiette Shish Taouk" if as_plate else "Shish Taouk"
+    if crispy and "taouk" in folded and "kit" in folded:
+        return "Kit Taouk Croustillant"
+    if crispy and "taouk" in folded:
+        return "Taouk Croustillant"
     if "shawarma" in folded and "hummus" in folded:
-        return "Hummus Shawarma — Lamb"
+        return "Shawarma Hummus — Agneau"
     if "shawarma" in folded and has_lamb and "kit" in folded:
-        return "Shawarma Agneau Kit"
+        return "Kit Shawarma Agneau"
     if "shawarma" in folded and has_lamb:
-        return "Lamb Shawarma Plate" if as_plate else "Shawarma — Lamb"
+        return "Assiette Shawarma Agneau" if as_plate else "Shawarma — Agneau"
     if "shawarma" in folded and has_chicken:
-        return "Shawarma — Chicken"
+        return "Shawarma — Poulet"
     if ("saumon" in folded or "salmon" in folded) and "kit" in folded:
-        return "Saumon Kit"
+        return "Kit Saumon"
     if "saumon" in folded or "salmon" in folded:
-        return "Salmon Plate"
+        return "Assiette Saumon"
     if "falafel" in folded:
-        return "Falafel"
+        return "Assiette Falafel" if as_plate else "Falafel"
     if "halloumi" in folded:
         return "Halloumi"
     if "cauliflower" in folded or "chou-fleur" in folded or "chou fleur" in folded:
-        return "Cauliflower"
+        return "Assiette Chou-Fleur" if as_plate else "Chou-Fleur"
     if folded == "riz" or folded == "rice":
         return "Riz"
     if "quinoa" in folded:
@@ -191,7 +192,7 @@ def _sticker_for_item(name: str, as_plate: bool = False) -> str | None:
 def _choice_stickers(name: str, as_plate: bool = False) -> list[str]:
     folded = name.lower()
     if "fattouch" in folded and not _skip_order_item(name, as_plate):
-        kind = "Zesty Fattouch" if "zesty" in folded else "Classic Fattouch"
+        kind = "Fattouch Zesté" if "zest" in folded else "Fattouch Classique"
         extra = ""
         if "halloumi" in folded:
             extra = "Halloumi"
@@ -212,10 +213,10 @@ def _order_stickers_for(name: str, detail: str | None) -> list[str]:
 def _component_parent(sticker: str | None) -> str | None:
     if not sticker:
         return None
-    if sticker.startswith("Classic Fattouch"):
-        return "Classic Fattouch"
-    if sticker.startswith("Zesty Fattouch"):
-        return "Zesty Fattouch"
+    if sticker.startswith("Fattouch Classique"):
+        return "Fattouch Classique"
+    if sticker.startswith("Fattouch Zesté"):
+        return "Fattouch Zesté"
     return sticker
 
 
@@ -232,9 +233,9 @@ def _sticker_for_component(parent: str | None, name: str) -> str | None:
         return None
     folded = name.lower()
     if "fried pita" in folded or "dressing" in folded:
-        if parent == "Zesty Fattouch":
-            return "For Zesty"
-        return "For Fattouch"
+        if parent == "Fattouch Zesté":
+            return "Pour Zesté"
+        return "Pour Fattouch"
     return None
 
 
@@ -313,8 +314,8 @@ def order_stickers(data: bytes) -> tuple[str, list[tuple[str, int]], list[str]]:
                 printed_extra = True
         if not stickers and not printed_extra:
             left_out.append(_left_out_label(detail or raw_name))
-        if parent in {"Classic Fattouch", "Zesty Fattouch"} and not saw_accompaniment:
-            dressing = "For Zesty" if parent == "Zesty Fattouch" else "For Fattouch"
+        if parent in {"Fattouch Classique", "Fattouch Zesté"} and not saw_accompaniment:
+            dressing = "Pour Zesté" if parent == "Fattouch Zesté" else "Pour Fattouch"
             queue.append((dressing, quantity * 2))
     merged: list[tuple[str, int]] = []
     for name, count in queue:
